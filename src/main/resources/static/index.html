@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>InSight AI – Chatbox</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Tách CSS ra file riêng -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app" id="app-root">
+    <!-- Sidebar conversation list -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-title">Cuộc hội thoại</div>
+            <button class="new-conv-btn" id="new-conv-btn">New chat
+            </button>
+        </div>
+        <div id="conv-list" class="conv-list">
+            <!-- JS sẽ render danh sách conversation vào đây -->
+        </div>
+        <div class="sidebar-footer">
+            <div class="sidebar-footer-text">
+                Lịch sử được lưu theo từng cuộc hội thoại. Bấm vào để xem lại.
+            </div>
+            <button class="logout-btn" id="logout-btn">Đăng xuất</button>
+        </div>
+    </aside>
+
+    <!-- Main chat -->
+    <main class="main">
+        <header class="main-header">
+            <div class="title-block">
+                <!-- Dùng SVG inline data-URL làm logo tạm nếu file ảnh không tồn tại -->
+                <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40'><rect width='100%25' height='100%25' fill='%2366a3ff'/><text x='50%25' y='50%25' font-size='16' fill='white' dominant-baseline='middle' text-anchor='middle'>IA</text></svg>" class="avatar-img" alt="Logo">
+                <div>
+                    <div class="app-name">InSight AI</div>
+                    <div class="app-desc">Chatbox phân tích nội dung & hỗ trợ bạn hiểu thông tin sâu hơn.</div>
+                </div>
+            </div>
+            <div class="header-actions">
+                <!-- Phóng to / thu nhỏ (ẩn/hiện sidebar) -->
+                <button id="toggle-layout" class="header-icon-btn" title="Phóng to / thu nhỏ chat">
+                    ⤢
+                </button>
+            </div>
+        </header>
+
+        <section class="chat-area">
+            <div id="messages" class="messages"></div>
+            <div id="status" class="status-bar"></div>
+
+            <div class="input-area">
+                <div class="input-row">
+                    <div class="input-box">
+                        <textarea id="message-input" rows="1" aria-label="Nội dung cần kiểm tra"
+                                  placeholder="Dán đoạn tin hoặc bài báo tiếng Việt để kiểm tra Fake/Real... (Shift+Enter để xuống dòng)"></textarea>
+                        <div class="input-actions">
+                            <input type="file" id="file-input" accept=".docx" style="display:none">
+                            <button type="button" class="icon-btn" id="attach-btn" title="Tải lên .docx">
+                                📎
+                            </button>
+                        </div>
+                    </div>
+                    <button class="send-btn" id="send-btn">Phân tích</button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Toast -->
+    <div id="toast" class="toast"></div>
+
+    <!-- Modal xác nhận xóa -->
+    <div id="confirm-modal" class="modal-backdrop">
+        <div class="modal">
+            <div class="modal-title">Xóa cuộc hội thoại?</div>
+            <div class="modal-text">
+                Bạn có chắc muốn xóa toàn bộ đoạn chat này? Hành động này không thể hoàn tác.
+            </div>
+            <div class="modal-actions">
+                <button id="confirm-cancel" class="btn-secondary">Hủy</button>
+                <button id="confirm-ok" class="btn-danger">Đồng ý</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ===== Lấy các element =====
+    const appRoot      = document.getElementById('app-root');
+    const messagesDiv  = document.getElementById('messages');
+    const statusDiv    = document.getElementById('status');
+    const messageInput = document.getElementById('message-input');
+    const sendBtn      = document.getElementById('send-btn');
+    const fileInput    = document.getElementById('file-input');
+    const attachBtn    = document.getElementById('attach-btn');
+    const convListEl   = document.getElementById('conv-list');
+    const newConvBtn   = document.getElementById('new-conv-btn');
+    const logoutBtn    = document.getElementById('logout-btn');
+    const toastEl      = document.getElementById('toast');
+    const toggleLayoutBtn = document.getElementById('toggle-layout');
+
+    const confirmModal   = document.getElementById('confirm-modal');
+    const confirmCancel  = document.getElementById('confirm-cancel');
+    const confirmOk      = document.getElementById('confirm-ok');
+    let pendingDeleteId  = null;
+
+    // ===== User login từ localStorage =====
+    const savedUser = localStorage.getItem("insight_user");
+    let userId = null;
+
+    if (savedUser) {
+        try {
+            const u = JSON.parse(savedUser);
+            userId = u.id;
+        } catch (e) {
+            console.error("Lỗi parse insight_user:", e);
+        }
+    }
+
+    if (!userId) {
+        // Nếu chưa có user trong localStorage thì tạo 1 user tạm (guest) để vào thẳng trang chính
+        userId = 'guest';
+        try {
+            localStorage.setItem('insight_user', JSON.stringify({ id: userId, username: 'Khách' }));
+            console.info('Tạo user tạm (guest) trong localStorage để vào thẳng trang chính.');
+        } catch (e) {
+            console.warn('Không thể lưu insight_user vào localStorage:', e);
+        }
+    }
+
+    // ===== State =====
+    let conversationId = null;
+    let conversations = [];   // danh sách cuộc hội thoại (sidebar)
+
+    // ===== Helper: Toast =====
+    function showToast(message, type = 'error') {
+        toastEl.textContent = message;
+        toastEl.classList.remove('error', 'success');
+        if (type === 'success') toastEl.classList.add('success');
+        else toastEl.classList.add('error');
+
+        toastEl.classList.add('show');
+        setTimeout(() => {
+            toastEl.classList.remove('show');
+        }, 2500);
+    }
+
+    // ===== Helper: format time & messages =====
+    function formatTime(isoString) {
+        if (!isoString) return '';
+        const d = new Date(isoString);
+        if (isNaN(d.getTime())) return '';
+        return d.toLocaleTimeString('vi-VN', {hour: '2-digit', minute: '2-digit'});
+    }
+
+    function addMessage(sender, text, extra = {}) {
+        const row = document.createElement('div');
+        const isUser = sender.toUpperCase() === 'USER';
+        row.classList.add('message-row', isUser ? 'user' : 'model');
+
+        const bubble = document.createElement('div');
+        bubble.classList.add('message-bubble');
+        bubble.textContent = text;
+
+        row.appendChild(bubble);
+
+        // Thông tin verdict/score cho AI
+        if (!isUser && (extra.verdict || extra.score)) {
+            const extraDiv = document.createElement('div');
+            extraDiv.className = 'model-extra';
+
+            if (extra.verdict) {
+                const badge = document.createElement('span');
+                badge.classList.add('badge');
+                if (extra.verdict === 'FAKE') badge.classList.add('badge-fake');
+                else if (extra.verdict === 'REAL') badge.classList.add('badge-real');
+                badge.textContent = extra.verdict === 'FAKE' ? 'TIN GIẢ' : 'TIN THẬT';
+                extraDiv.appendChild(badge);
+            }
+
+            if (typeof extra.score === 'number') {
+                const s = document.createElement('span');
+                s.textContent = `Độ tin cậy: ${(extra.score * 100).toFixed(1)}%`;
+                extraDiv.appendChild(s);
+            }
+
+            row.appendChild(extraDiv);
+        }
+
+        messagesDiv.appendChild(row);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    function clearMessages() {
+        messagesDiv.innerHTML = '';
+    }
+
+    // ===== Sidebar: danh sách conversation =====
+    function renderConversationList() {
+        convListEl.innerHTML = '';
+        conversations
+            .sort((a, b) => (b.updatedAtTs || 0) - (a.updatedAtTs || 0))
+            .forEach(conv => {
+                const item = document.createElement('div');
+                item.className = 'conv-item';
+                item.dataset.id = conv.id;
+                if (String(conv.id) === String(conversationId)) {
+                    item.classList.add('active');
+                }
+
+                const left = document.createElement('div');
+                left.className = 'conv-left';
+
+                const title = document.createElement('div');
+                title.className = 'conv-title';
+                title.textContent = conv.title || ('Cuộc trò chuyện ' + conv.id);
+
+                const meta = document.createElement('div');
+                meta.className = 'conv-meta';
+
+                if (conv.lastVerdict) {
+                    const badge = document.createElement('span');
+                    badge.classList.add('badge');
+                    if (conv.lastVerdict === 'FAKE') badge.classList.add('badge-fake');
+                    else if (conv.lastVerdict === 'REAL') badge.classList.add('badge-real');
+                    badge.textContent = conv.lastVerdict === 'FAKE' ? 'TIN GIẢ' : 'TIN THẬT';
+                    meta.appendChild(badge);
+                }
+
+                const time = document.createElement('span');
+                time.textContent = conv.updatedAt || '';
+                meta.appendChild(time);
+
+                left.appendChild(title);
+                left.appendChild(meta);
+
+                const delBtn = document.createElement('button');
+                delBtn.className = 'conv-delete';
+                delBtn.textContent = 'Xóa';
+                delBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();  // không trigger chọn cuộc trò chuyện
+                    openDeleteModal(conv.id);
+                });
+
+                item.appendChild(left);
+                item.appendChild(delBtn);
+                item.addEventListener('click', () => selectConversation(conv.id));
+
+                convListEl.appendChild(item);
+            });
+    }
+
+    function upsertConversationFromResponse(data) {
+        if (!data || !data.conversationId) return;
+        const id = data.conversationId;
+        const now = new Date();
+        const nowStr = now.toLocaleTimeString('vi-VN', {hour: '2-digit', minute: '2-digit'});
+        let conv = conversations.find(c => String(c.id) === String(id));
+        if (!conv) {
+            conv = {
+                id,
+                title: data.title || 'Cuộc trò chuyện ' + id,
+                lastVerdict: data.verdict || null,
+                updatedAt: nowStr,
+                updatedAtTs: now.getTime()
+            };
+            conversations.push(conv);
+        } else {
+            conv.lastVerdict = data.verdict || conv.lastVerdict;
+            conv.updatedAt = nowStr;
+            conv.updatedAtTs = now.getTime();
+        }
+        renderConversationList();
+    }
+
+    async function selectConversation(id) {
+        try {
+            statusDiv.textContent = 'Đang tải lịch sử cuộc hội thoại...';
+            const res = await fetch(`/api/conversations/${id}?userId=${userId}`);
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const data = await res.json();
+
+            conversationId = data.id;
+            clearMessages();
+
+            (data.messages || []).forEach(m => {
+                addMessage(m.sender, m.content, {
+                    verdict: m.verdict,
+                    score: m.score
+                });
+            });
+
+            upsertConversationFromResponse({
+                conversationId: data.id,
+                verdict: data.lastVerdict,
+                title: data.title
+            });
+
+            statusDiv.textContent = '';
+        } catch (e) {
+            console.error(e);
+            statusDiv.textContent = 'Không tải được lịch sử cuộc hội thoại.';
+            showToast('Lỗi tải lịch sử: ' + e.message, 'error');
+        }
+    }
+
+    // Lấy danh sách conversation ban đầu
+    async function loadConversations() {
+        try {
+            const res = await fetch(`/api/conversations?userId=${userId}`);
+            if (!res.ok) {
+                console.warn('Không load được danh sách cuộc hội thoại, HTTP', res.status);
+                return;
+            }
+            const data = await res.json();
+
+            conversations = (data || []).map(c => {
+                const updatedAtTs = c.updatedAt ? new Date(c.updatedAt).getTime() : 0;
+                return {
+                    id: c.id,
+                    title: c.title || ('Cuộc trò chuyện ' + c.id),
+                    lastVerdict: c.lastVerdict || null,
+                    updatedAt: formatTime(c.updatedAt),
+                    updatedAtTs
+                };
+            });
+
+            renderConversationList();
+
+            if (conversations.length > 0) {
+                const newest = conversations.sort((a,b) => b.updatedAtTs - a.updatedAtTs)[0];
+                await selectConversation(newest.id);
+            } else {
+                statusDiv.textContent = 'Cuộc trò chuyện mới.';
+            }
+
+        } catch (e) {
+            console.error('Lỗi loadConversations', e);
+            showToast('Không tải được danh sách cuộc hội thoại.', 'error');
+        }
+    }
+
+    newConvBtn.addEventListener('click', () => {
+        conversationId = null;
+        clearMessages();
+        statusDiv.textContent = 'Đã tạo cuộc trò chuyện mới. Hãy nhập văn bản để phân tích.';
+        renderConversationList();
+    });
+
+    // ===== Gửi TEXT (Enter gửi, Shift+Enter xuống dòng) =====
+    async function sendText() {
+        const text = messageInput.value.trim();
+        if (!text) {
+            showToast('Vui lòng nhập nội dung bài viết cần kiểm tra.', 'error');
+            return;
+        }
+
+        addMessage('USER', text);
+        messageInput.value = '';
+        autoResizeTextarea();
+
+        statusDiv.textContent = 'Đang phân tích nội dung...';
+        sendBtn.disabled = true;
+
+        try {
+            const res = await fetch('/api/chat/text', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId, conversationId, text })
+            });
+
+            if (!res.ok) {
+                addMessage('MODEL',
+                    '⚠ Hiện tại InSight AI chưa phân tích được nội dung (lỗi kết nối mô hình).',
+                );
+                statusDiv.textContent = 'Không kết nối được AI (HTTP ' + res.status + ').';
+                showToast('Máy chủ phân tích đang gặp sự cố.', 'error');
+                return;
+            }
+
+            const data = await res.json();
+            conversationId = data.conversationId ?? conversationId;
+
+            const verdict = data.verdict;
+            const score = data.score;
+
+            const msgText = verdict === 'FAKE'
+                ? 'TIN GIẢ. Hãy cẩn thận khi chia sẻ nội dung này.'
+                : verdict === 'REAL'
+                    ? 'Kết quả: TIN THẬT / ĐÁNG TIN CẬY.'
+                    : `Kết quả: ${verdict || 'Không xác định'}`;
+
+            addMessage('MODEL', msgText, { verdict, score });
+            upsertConversationFromResponse(data);
+
+            statusDiv.textContent = '';
+        } catch (e) {
+            console.error(e);
+            addMessage('MODEL',
+                '⚠ Không thể kết nối tới máy chủ phân tích. Vui lòng thử lại sau.',
+            );
+            statusDiv.textContent = 'Có lỗi khi gọi API phân tích.';
+            showToast('Lỗi API: ' + e.message, 'error');
+        } finally {
+            sendBtn.disabled = false;
+        }
+    }
+
+    function autoResizeTextarea() {
+        messageInput.style.height = '24px';
+        messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + 'px';
+    }
+
+    messageInput.addEventListener('input', autoResizeTextarea);
+
+    // Enter = gửi, Shift+Enter = xuống dòng
+    messageInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();   // không xuống dòng
+            sendText();
+        }
+    });
+
+    sendBtn.addEventListener('click', sendText);
+
+    // ===== Gửi FILE .docx =====
+    attachBtn.addEventListener('click', () => {
+        fileInput.click();
+    });
+
+    fileInput.addEventListener('change', async () => {
+        const file = fileInput.files[0];
+        if (!file) return;
+
+        const lower = file.name.toLowerCase();
+        if (!lower.endsWith('.docx')) {
+            showToast('Chỉ cho phép gửi file .docx', 'error');
+            fileInput.value = '';
+            return;
+        }
+
+        addMessage('USER', `Đã tải lên file: ${file.name}`);
+        statusDiv.textContent = 'Đang upload & phân tích file Word...';
+
+        const formData = new FormData();
+        formData.append('userId', userId);
+        if (conversationId != null) {
+            formData.append('conversationId', conversationId);
+        }
+        formData.append('file', file);
+
+        try {
+            const res = await fetch('/api/chat/file', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!res.ok) {
+                addMessage('MODEL',
+                    '⚠ Hiện tại InSight AI chưa phân tích được file (lỗi kết nối mô hình).',
+                );
+                statusDiv.textContent = 'Không kết nối được AI (HTTP ' + res.status + ').';
+                showToast('Máy chủ phân tích đang gặp sự cố.', 'error');
+                return;
+            }
+
+            const data = await res.json();
+            conversationId = data.conversationId ?? conversationId;
+
+            const verdict = data.verdict;
+            const score = data.score;
+            const msgText = verdict === 'FAKE'
+                ? `File "${file.name}" có dấu hiệu TIN GIẢ.`
+                : verdict === 'REAL'
+                    ? `File "${file.name}" có nội dung ĐÁNG TIN.`
+                    : `Đã phân tích file: ${file.name}`;
+
+            addMessage('MODEL', msgText, { verdict, score });
+            upsertConversationFromResponse(data);
+
+            statusDiv.textContent = '';
+            showToast('Phân tích file hoàn tất.', 'success');
+        } catch (e) {
+            console.error(e);
+            addMessage('MODEL',
+                '⚠ Không thể kết nối tới máy chủ phân tích. Vui lòng thử lại sau.',
+            );
+            statusDiv.textContent = 'Lỗi khi upload / phân tích file.';
+            showToast('Lỗi upload: ' + e.message, 'error');
+        } finally {
+            fileInput.value = '';
+        }
+    });
+
+    // ===== Toggle layout (phóng to / thu nhỏ) =====
+    toggleLayoutBtn.addEventListener('click', () => {
+        appRoot.classList.toggle('sidebar-collapsed');
+    });
+
+    // ===== Modal xóa cuộc hội thoại =====
+    function openDeleteModal(id) {
+        pendingDeleteId = id;
+        confirmModal.classList.add('show');
+    }
+
+    function closeDeleteModal() {
+        pendingDeleteId = null;
+        confirmModal.classList.remove('show');
+    }
+
+    confirmCancel.addEventListener('click', closeDeleteModal);
+
+    confirmOk.addEventListener('click', async () => {
+        if (!pendingDeleteId) return;
+
+        const id = pendingDeleteId;
+        try {
+            const res = await fetch(`/api/conversations/${id}?userId=${userId}`, {
+                method: 'DELETE'
+            });
+
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+
+            // Xóa khỏi danh sách conversation trên giao diện
+            conversations = conversations.filter(c => +c.id !== +id);
+            renderConversationList();
+
+            // Nếu đang ở cuộc hội thoại đó → reset màn hình chat
+            if (+conversationId === +id) {
+                conversationId = null;
+                clearMessages();
+                statusDiv.textContent = "Cuộc trò chuyện mới.";
+            }
+
+            showToast("Đã xóa cuộc hội thoại.", "success");
+
+        } catch (e) {
+            console.error(e);
+            showToast("Không thể xóa cuộc hội thoại: " + e.message, "error");
+        } finally {
+            closeDeleteModal();
+        }
+    });
+
+    // ===== Logout =====
+    logoutBtn.addEventListener('click', () => {
+        // Xóa dữ liệu cuộc hội thoại cục bộ nhưng giữ người dùng ở chế độ 'guest'
+        try {
+            conversations = [];
+            conversationId = null;
+            clearMessages();
+            renderConversationList();
+            statusDiv.textContent = 'Bạn đã đăng xuất (dữ liệu cục bộ đã xoá). Đăng nhập lại dưới dạng Khách.';
+            localStorage.setItem('insight_user', JSON.stringify({ id: 'guest', username: 'Khách' }));
+            showToast('Đã đăng xuất. Bạn đang ở chế độ Khách.', 'success');
+            // reload để làm mới state ứng dụng
+            window.location.reload();
+        } catch (e) {
+            console.error('Lỗi khi logout:', e);
+            showToast('Lỗi khi đăng xuất: ' + e.message, 'error');
+        }
+    });
+
+    // ===== Khởi tạo =====
+    addMessage(
+        'MODEL',
+        'Xin chào 👋. Mình là InSight AI. Hãy dán đoạn tin / bài báo hoặc tải lên file Word (.docx) để kiểm tra Fake/Real và hiểu rõ hơn về nội dung nhé!'
+    );
+
+    loadConversations();
+</script>
+</body>
+</html>
