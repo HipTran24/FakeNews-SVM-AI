@@ -9,4 +9,6 @@ import java.util.List;
 public interface AnalyzedItemRepository extends JpaRepository<AnalyzedItem, Long> {
 
     List<AnalyzedItem> findBySession(Session session);
+    List<AnalyzedItem> findBySessionOrderByCreatedAtDesc(Session session);
+
 }

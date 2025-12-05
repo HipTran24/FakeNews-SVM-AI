@@ -2,6 +2,7 @@ package com.example.demo.controller;
 import com.example.demo.dto.AnalyzeTextRequest;
 import com.example.demo.dto.AnalyzeResponse;
 import com.example.demo.dto.AnalyzeUrlRequest;
+import com.example.demo.dto.HistoryItemResponse;
 import com.example.demo.entity.Session;
 import com.example.demo.service.AnalyzeService;
 import com.example.demo.service.SessionService;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/analyze")
@@ -30,13 +32,10 @@ public class AnalyzeController {
             @RequestBody AnalyzeTextRequest request,
             HttpServletRequest httpServletRequest) {
 
-        // 1. Lấy / tạo Session
         Session session = sessionService.getOrCreateSession(sessionToken, httpServletRequest);
 
-        // 2. Phân tích và lưu kết quả
         AnalyzeResponse response = analyzeService.analyzeText(session, request);
 
-        // 3. Đưa session token vào response để FE lưu
         response.setSessionToken(session.getSessionToken());
 
         return ResponseEntity.ok(response);
@@ -67,4 +66,15 @@ public class AnalyzeController {
 
         return ResponseEntity.ok(response);
     }
+    @GetMapping("/history")
+    public ResponseEntity<List<HistoryItemResponse>> getHistory(
+            @RequestHeader(value = "X-Session-Token", required = false) String sessionToken) {
+
+        List<HistoryItemResponse> history =
+                analyzeService.getHistoryBySessionToken(sessionToken);
+
+        return ResponseEntity.ok(history);
+    }
+
+
 }

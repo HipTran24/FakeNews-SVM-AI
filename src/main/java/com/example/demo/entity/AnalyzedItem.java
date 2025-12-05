@@ -14,21 +14,17 @@ public class AnalyzedItem {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // Nhiều item thuộc về 1 session
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "session_id", nullable = false)
     private Session session;
 
-    // Kiểu input: TEXT / FILE / URL
     @Enumerated(EnumType.STRING)
     @Column(name = "input_type", nullable = false, length = 10)
     private InputType inputType;
 
-    // Dùng khi input_type = URL
     @Column(name = "url", length = 1000)
     private String url;
 
-    // Dùng khi input_type = FILE
     @Column(name = "original_file_name", length = 255)
     private String originalFileName;
 
@@ -38,13 +34,10 @@ public class AnalyzedItem {
     @Column(name = "content_type", length = 100)
     private String contentType;
 
-    // Dùng cho TEXT hoặc URL (tiêu đề bài viết)
     @Column(name = "title", length = 500)
     private String title;
-
-    // Nội dung cuối cùng dùng để phân tích
     @Lob
-    @Column(name = "raw_content", nullable = false)
+    @Column(name = "raw_content", columnDefinition = "LONGTEXT")
     private String rawContent;
 
     @Column(name = "language", length = 10)
