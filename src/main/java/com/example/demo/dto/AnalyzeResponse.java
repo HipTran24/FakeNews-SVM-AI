@@ -8,9 +8,6 @@ public class AnalyzeResponse {
     // ID của bản ghi AnalysisResult
     private Long resultId;
 
-    // Nhãn dự đoán: FAKE / REAL / UNKNOWN
-    private String label;
-
     // Xác suất tin giả
     private BigDecimal probFake;
 
@@ -19,6 +16,12 @@ public class AnalyzeResponse {
 
     // Session token để FE lưu lại cho những lần request sau
     private String sessionToken;
+
+    // Nhãn dự đoán (FAKE / REAL / v.v.)
+    private String label;
+
+    // ID của cuộc hội thoại
+    private Long conversationId;
 
     public AnalyzeResponse() {
     }
@@ -69,5 +72,13 @@ public class AnalyzeResponse {
 
     public void setSessionToken(String sessionToken) {
         this.sessionToken = sessionToken;
+    }
+
+    public Long getConversationId() {
+        return conversationId;
+    }
+
+    public void setConversationId(Long conversationId) {
+        this.conversationId = conversationId;
     }
 }

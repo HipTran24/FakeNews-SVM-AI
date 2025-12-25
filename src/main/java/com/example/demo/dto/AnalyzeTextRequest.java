@@ -3,9 +3,9 @@ package com.example.demo.dto;
 public class AnalyzeTextRequest {
     private String title;
 
-    // Nội dung cần phân tích (bắt buộc)
     private String content;
 
+    private Long conversationId;
     public AnalyzeTextRequest() {
     }
 
@@ -24,4 +24,12 @@ public class AnalyzeTextRequest {
     public void setContent(String content) {
         this.content = content;
     }
+
+    public Long getConversationId() {
+        return conversationId;
+    }
+    public void setConversationId(Long conversationId) {
+        this.conversationId = conversationId;
+    }
+
 }

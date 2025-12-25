@@ -148,5 +148,21 @@ public class AnalyzedItem {
     public void setAnalysisResults(List<AnalysisResult> analysisResults) {
         this.analysisResults = analysisResults;
     }
+    // ...
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "conversation_id")
+    private Conversation conversation;
+
+// ===== getter / setter =====
+
+    public Conversation getConversation() {
+        return conversation;
+    }
+
+    public void setConversation(Conversation conversation) {
+        this.conversation = conversation;
+    }
+
 }
 

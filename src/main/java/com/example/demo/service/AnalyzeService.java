@@ -10,12 +10,16 @@ import com.example.demo.repository.AnalyzedItemRepository;
 import com.example.demo.repository.AnalysisResultRepository;
 import com.example.demo.ml.SvmService;
 import com.example.demo.ml.SvmPrediction;
+import com.example.demo.repository.ConversationRepository;
 import com.example.demo.repository.SessionRepository;
+import org.apache.poi.xwpf.extractor.XWPFWordExtractor;
+import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import java.io.IOException;
+import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -30,23 +34,50 @@ public class AnalyzeService {
         private final AnalysisResultRepository resultRepo;
         private final SvmService svmService;
         private final SessionRepository sessionRepo;
+        private final ConversationRepository conversationRepository;
 
-        public AnalyzeService(AnalyzedItemRepository itemRepo,
+    public AnalyzeService(AnalyzedItemRepository itemRepo,
                               AnalysisResultRepository resultRepo,
                               SvmService svmService,
-                              SessionRepository sessionRepo) {
+                              SessionRepository sessionRepo, ConversationRepository conversationRepository) {
             this.itemRepo = itemRepo;
             this.resultRepo = resultRepo;
             this.svmService = svmService;
             this.sessionRepo = sessionRepo;
+            this.conversationRepository = conversationRepository;
 
     }
 
+    private Conversation resolveConversation(Session session, Long conversationId, String fallbackTitle) {
+        if (conversationId != null) {
+            return conversationRepository.findByIdAndSessionAndDeletedFalse(conversationId, session)
+                    .orElseThrow(() -> new RuntimeException("Conversation not found"));
+        }
+        // nếu conversationId null → tạo mới
+        Conversation conv = new Conversation();
+        conv.setSession(session);
+        conv.setTitle((fallbackTitle != null && !fallbackTitle.isBlank())
+                ? fallbackTitle
+                : "Cuộc hội thoại mới");
+        conv.setCreatedAt(java.time.LocalDateTime.now());
+        conv.setUpdatedAt(conv.getCreatedAt());
+        conv.setDeleted(false);
+        return conversationRepository.save(conv);
+    }
 
     public AnalyzeResponse analyzeText(Session session, AnalyzeTextRequest req) {
 
+        Conversation conversation = resolveConversation(
+                session,
+                req.getConversationId(),
+                req.getTitle() != null ? req.getTitle() : (req.getContent() != null
+                        ? req.getContent().substring(0, Math.min(50, req.getContent().length()))
+                        : "Cuộc hội thoại mới")
+        );
+
         AnalyzedItem item = new AnalyzedItem();
         item.setSession(session);
+        item.setConversation(conversation);           // GẮN CONVERSATION
         item.setInputType(InputType.TEXT);
         item.setTitle(req.getTitle());
         item.setRawContent(req.getContent());
@@ -55,7 +86,12 @@ public class AnalyzeService {
 
         item = itemRepo.save(item);
 
+
         AnalysisResult result = buildResultForItem(item);
+
+
+        conversation.setUpdatedAt(LocalDateTime.now());
+        conversationRepository.save(conversation);
 
         AnalyzeResponse res = new AnalyzeResponse();
         res.setItemId(item.getId());
@@ -63,6 +99,8 @@ public class AnalyzeService {
         res.setLabel(result.getPredictedLabel().name());
         res.setProbFake(result.getProbFake());
         res.setProbReal(result.getProbReal());
+
+        res.setConversationId(conversation.getId());
 
         return res;
     }
@@ -110,16 +148,35 @@ public class AnalyzeService {
 
 
     public AnalyzeResponse analyzeFile(Session session, MultipartFile file) throws IOException {
+        String rawContent;
 
-        String rawContent = new String(file.getBytes(), StandardCharsets.UTF_8);
+        String filename = file.getOriginalFilename();
+        String lowerName = filename != null ? filename.toLowerCase() : "";
+
+        if (lowerName.endsWith(".docx")) {
+            // Đọc nội dung file Word
+            try (InputStream is = file.getInputStream();
+                 XWPFDocument doc = new XWPFDocument(is);
+                 XWPFWordExtractor extractor = new XWPFWordExtractor(doc)) {
+
+                rawContent = extractor.getText();
+            }
+        } else {
+            // fallback: cố đọc text thường (txt)
+            rawContent = new String(file.getBytes(), StandardCharsets.UTF_8);
+        }
+
+        if (rawContent == null || rawContent.isBlank()) {
+            rawContent = "EMPTY_FILE_CONTENT";
+        }
 
         AnalyzedItem item = new AnalyzedItem();
         item.setSession(session);
         item.setInputType(InputType.FILE);
-        item.setOriginalFileName(file.getOriginalFilename());
+        item.setOriginalFileName(filename);
         item.setContentType(file.getContentType());
-        item.setStoredFilePath(null); // nếu sau này có lưu file thì set lại
-        item.setTitle(file.getOriginalFilename());
+        item.setStoredFilePath(null); // nếu sau này lưu file
+        item.setTitle(filename);
         item.setRawContent(rawContent);
         item.setLanguage("vi");
         item.setCreatedAt(LocalDateTime.now());
@@ -134,7 +191,6 @@ public class AnalyzeService {
         res.setLabel(result.getPredictedLabel().name());
         res.setProbFake(result.getProbFake());
         res.setProbReal(result.getProbReal());
-
         return res;
     }
 
@@ -191,6 +247,7 @@ public class AnalyzeService {
                 })
                 .orElse(Collections.emptyList());
     }
+
 
 
 
