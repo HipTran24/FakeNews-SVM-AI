@@ -44,11 +44,13 @@ public class AnalyzeController {
     public ResponseEntity<AnalyzeResponse> analyzeFile(
             @RequestHeader(value = "X-Session-Token", required = false) String sessionToken,
             @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "conversationId", required = false) Long conversationId,
+
             HttpServletRequest httpServletRequest) throws IOException {
 
         Session session = sessionService.getOrCreateSession(sessionToken, httpServletRequest);
 
-        AnalyzeResponse response = analyzeService.analyzeFile(session, file);
+        AnalyzeResponse response = analyzeService.analyzeFile(session, file, conversationId);
         response.setSessionToken(session.getSessionToken());
 
         return ResponseEntity.ok(response);

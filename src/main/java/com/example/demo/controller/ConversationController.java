@@ -31,7 +31,6 @@ public class ConversationController {
         this.conversationService = conversationService;
     }
 
-    // Lấy danh sách conversation của 1 session ẩn danh
     @GetMapping
     public ResponseEntity<List<ConversationSummaryResponse>> listConversations(
             @RequestHeader(value = "X-Session-Token", required = false) String sessionToken,
@@ -42,7 +41,6 @@ public class ConversationController {
         return ResponseEntity.ok(list);
     }
 
-    // Lấy chi tiết 1 conversation (dùng khi click vào sidebar)
     @GetMapping("/{id}")
     public ResponseEntity<ConversationDetailResponse> getConversation(
             @PathVariable("id") Long id,
@@ -54,7 +52,6 @@ public class ConversationController {
         return ResponseEntity.ok(resp);
     }
 
-    // Xoá (soft delete) conversation
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteConversation(
             @PathVariable("id") Long id,

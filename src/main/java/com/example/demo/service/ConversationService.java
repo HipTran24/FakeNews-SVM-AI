@@ -49,7 +49,6 @@ public class ConversationService {
 
         return list.stream()
                 .map(conv -> {
-                    // tìm verdict gần nhất trong các AnalysisResult thuộc các item của conversation
                     PredictedLabel lastLabel = null;
                     java.time.LocalDateTime lastTime = null;
 
@@ -79,17 +78,14 @@ public class ConversationService {
                 .findByIdAndSessionAndDeletedFalse(conversationId, session)
                 .orElseThrow(() -> new RuntimeException("Conversation not found"));
 
-        // build messages: mỗi AnalyzedItem ~ 2 message (USER, MODEL)
         List<MessageDto> messages = new ArrayList<>();
 
-        // sort items theo createdAt
         List<AnalyzedItem> items = new ArrayList<>(conv.getItems());
         items.sort(Comparator.comparing(AnalyzedItem::getCreatedAt));
 
         PredictedLabel lastLabel = null;
 
         for (AnalyzedItem item : items) {
-            // USER message
             String userContent;
             switch (item.getInputType()) {
                 case TEXT -> userContent = Optional.ofNullable(item.getTitle())
@@ -111,7 +107,6 @@ public class ConversationService {
                     item.getCreatedAt()
             ));
 
-            // MODEL message dựa trên AnalysisResult mới nhất của item
             AnalysisResult latest = item.getAnalysisResults().stream()
                     .max(Comparator.comparing(AnalysisResult::getCreatedAt))
                     .orElse(null);

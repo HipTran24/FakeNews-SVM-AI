@@ -4,10 +4,10 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 public class MessageDto {
-    private String sender;   // "USER" | "MODEL"
+    private String sender;
     private String content;
-    private String verdict;  // FAKE / REAL / null (chỉ cho MODEL)
-    private Double score;    // độ tin cậy (0..1)
+    private String verdict;
+    private Double score;
     private LocalDateTime createdAt;
 
     public MessageDto() {
@@ -21,7 +21,6 @@ public class MessageDto {
         this.createdAt = createdAt;
     }
 
-    // getter / setter
 
     public String getSender() {
         return sender;

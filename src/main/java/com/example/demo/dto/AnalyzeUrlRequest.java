@@ -3,8 +3,9 @@ package com.example.demo.dto;
 public class AnalyzeUrlRequest {
     private String url;
 
-    // Tiêu đề (optional) – FE có thể gửi riêng hoặc để BE crawl
     private String title;
+
+    private Long conversationId;
 
     public AnalyzeUrlRequest() {
     }
@@ -23,5 +24,11 @@ public class AnalyzeUrlRequest {
 
     public void setTitle(String title) {
         this.title = title;
+    }
+    public Long getConversationId() {
+        return conversationId;
+    }
+    public void setConversationId(Long conversationId) {
+        this.conversationId = conversationId;
     }
 }

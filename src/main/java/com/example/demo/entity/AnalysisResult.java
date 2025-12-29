@@ -14,31 +14,24 @@ public class AnalysisResult {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // Nhiều kết quả thuộc về 1 item
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "item_id", nullable = false)
     private AnalyzedItem item;
 
-    // Nhãn AI dự đoán: FAKE / REAL / UNKNOWN
     @Enumerated(EnumType.STRING)
     @Column(name = "predicted_label", nullable = false, length = 10)
     private PredictedLabel predictedLabel;
 
-    // Xác suất tin giả
     @Column(name = "prob_fake", precision = 5, scale = 4)
     private BigDecimal probFake;
 
-    // Xác suất tin thật
     @Column(name = "prob_real", precision = 5, scale = 4)
     private BigDecimal probReal;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
-    // ===== Constructors =====
     public AnalysisResult() {}
-
-    // ===== Getters & Setters =====
 
     public Long getId() {
         return id;

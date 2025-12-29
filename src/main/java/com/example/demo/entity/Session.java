@@ -33,7 +33,6 @@ public class Session {
 
     public Session() {}
 
-    // GETTERS + SETTERS
 
     public Long getId() {
         return id;

@@ -13,13 +13,12 @@ public class Conversation {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // Mỗi session ẩn danh có thể có nhiều conversation
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "session_id", nullable = false)
     private Session session;
 
     @Column(nullable = false, length = 255)
-    private String title;               // Tiêu đề cuộc hội thoại (ví dụ: câu hỏi đầu tiên)
+    private String title;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
@@ -30,11 +29,9 @@ public class Conversation {
     @Column(name = "deleted", nullable = false)
     private boolean deleted = false;    // soft delete
 
-    // 1 conversation có thể có nhiều AnalyzedItem (nhiều lần check trong cùng cuộc trò chuyện)
     @OneToMany(mappedBy = "conversation", cascade = CascadeType.ALL)
     private List<AnalyzedItem> items = new ArrayList<>();
 
-    // ===== Getter / Setter =====
 
     public Long getId() {
         return id;

@@ -53,7 +53,6 @@ public class AnalyzeService {
             return conversationRepository.findByIdAndSessionAndDeletedFalse(conversationId, session)
                     .orElseThrow(() -> new RuntimeException("Conversation not found"));
         }
-        // nếu conversationId null → tạo mới
         Conversation conv = new Conversation();
         conv.setSession(session);
         conv.setTitle((fallbackTitle != null && !fallbackTitle.isBlank())
@@ -77,7 +76,7 @@ public class AnalyzeService {
 
         AnalyzedItem item = new AnalyzedItem();
         item.setSession(session);
-        item.setConversation(conversation);           // GẮN CONVERSATION
+        item.setConversation(conversation);
         item.setInputType(InputType.TEXT);
         item.setTitle(req.getTitle());
         item.setRawContent(req.getContent());
@@ -108,23 +107,26 @@ public class AnalyzeService {
 
     public AnalyzeResponse analyzeUrl(Session session, AnalyzeUrlRequest req) {
 
+        Conversation conversation = resolveConversation(
+                session,
+                req.getConversationId(),
+                req.getTitle() != null ? req.getTitle() : "Kiểm tra URL"
+        );
+
         String url = req.getUrl();
         String title = req.getTitle();
 
-        String rawContent = "";
+        String rawContent;
         try {
             Document doc = Jsoup.connect(url).get();
-
-            // Lấy text từ HTML
-            String extractedText = doc.body().text();
-
-            rawContent = extractedText;
+            rawContent = doc.body().text();
         } catch (Exception e) {
             rawContent = "UNABLE_TO_FETCH_URL_CONTENT";
         }
 
         AnalyzedItem item = new AnalyzedItem();
         item.setSession(session);
+        item.setConversation(conversation);
         item.setInputType(InputType.URL);
         item.setUrl(url);
         item.setTitle(title);
@@ -136,46 +138,52 @@ public class AnalyzeService {
 
         AnalysisResult result = buildResultForItem(item);
 
+        conversation.setUpdatedAt(LocalDateTime.now());
+        conversationRepository.save(conversation);
+
         AnalyzeResponse res = new AnalyzeResponse();
         res.setItemId(item.getId());
         res.setResultId(result.getId());
         res.setLabel(result.getPredictedLabel().name());
         res.setProbFake(result.getProbFake());
         res.setProbReal(result.getProbReal());
-
+        res.setConversationId(conversation.getId());
         return res;
     }
 
 
-    public AnalyzeResponse analyzeFile(Session session, MultipartFile file) throws IOException {
-        String rawContent;
 
+    public AnalyzeResponse analyzeFile(Session session, MultipartFile file, Long conversationId) throws IOException {
+
+        Conversation conversation = resolveConversation(
+                session,
+                conversationId,
+                file.getOriginalFilename() != null ? file.getOriginalFilename() : "Kiểm tra file"
+        );
+
+        String rawContent;
         String filename = file.getOriginalFilename();
         String lowerName = filename != null ? filename.toLowerCase() : "";
 
         if (lowerName.endsWith(".docx")) {
-            // Đọc nội dung file Word
             try (InputStream is = file.getInputStream();
                  XWPFDocument doc = new XWPFDocument(is);
                  XWPFWordExtractor extractor = new XWPFWordExtractor(doc)) {
-
                 rawContent = extractor.getText();
             }
         } else {
-            // fallback: cố đọc text thường (txt)
             rawContent = new String(file.getBytes(), StandardCharsets.UTF_8);
         }
 
-        if (rawContent == null || rawContent.isBlank()) {
-            rawContent = "EMPTY_FILE_CONTENT";
-        }
+        if (rawContent == null || rawContent.isBlank()) rawContent = "EMPTY_FILE_CONTENT";
 
         AnalyzedItem item = new AnalyzedItem();
         item.setSession(session);
+        item.setConversation(conversation);
         item.setInputType(InputType.FILE);
         item.setOriginalFileName(filename);
         item.setContentType(file.getContentType());
-        item.setStoredFilePath(null); // nếu sau này lưu file
+        item.setStoredFilePath(null);
         item.setTitle(filename);
         item.setRawContent(rawContent);
         item.setLanguage("vi");
@@ -185,14 +193,19 @@ public class AnalyzeService {
 
         AnalysisResult result = buildResultForItem(item);
 
+        conversation.setUpdatedAt(LocalDateTime.now());
+        conversationRepository.save(conversation);
+
         AnalyzeResponse res = new AnalyzeResponse();
         res.setItemId(item.getId());
         res.setResultId(result.getId());
         res.setLabel(result.getPredictedLabel().name());
         res.setProbFake(result.getProbFake());
         res.setProbReal(result.getProbReal());
+        res.setConversationId(conversation.getId());
         return res;
     }
+
 
     private AnalysisResult buildResultForItem(AnalyzedItem item) {
         SvmPrediction prediction = svmService.predict(item.getRawContent());
@@ -220,8 +233,7 @@ public class AnalyzeService {
                     List<HistoryItemResponse> history = new ArrayList<>();
 
                     for (AnalyzedItem item : items) {
-                        // Mỗi item hiện tại tương ứng 1 lần phân tích
-                        // → lấy list result rồi lấy phần tử cuối cùng
+
                         List<AnalysisResult> results = resultRepo.findByItem(item);
                         if (results.isEmpty()) {
                             continue;
@@ -237,7 +249,6 @@ public class AnalyzeService {
                         dto.setLabel(r.getPredictedLabel());
                         dto.setProbFake(r.getProbFake());
                         dto.setProbReal(r.getProbReal());
-                        // Thời gian tạo dùng createdAt của item
                         dto.setCreatedAt(item.getCreatedAt());
 
                         history.add(dto);
@@ -247,8 +258,5 @@ public class AnalyzeService {
                 })
                 .orElse(Collections.emptyList());
     }
-
-
-
 
 }

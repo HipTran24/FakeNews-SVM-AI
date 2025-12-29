@@ -19,26 +19,24 @@ public class SessionService {
     }
 
     public Session getOrCreateSession(String sessionToken, HttpServletRequest request) {
-        if (sessionToken != null && sessionToken.isBlank()) {
-            Optional<Session> exsting = sessionRepository.findBySessionToken(sessionToken);
-            if (exsting.isPresent()) {
-                Session s = exsting.get();
+        if (sessionToken != null && !sessionToken.isBlank()) {
+            Optional<Session> existing = sessionRepository.findBySessionToken(sessionToken);
+            if (existing.isPresent()) {
+                Session s = existing.get();
                 s.setLastAccessAt(LocalDateTime.now());
                 return sessionRepository.save(s);
             }
         }
+
         Session newSession = new Session();
         newSession.setSessionToken(UUID.randomUUID().toString());
         newSession.setCreatedAt(LocalDateTime.now());
         newSession.setLastAccessAt(LocalDateTime.now());
+        newSession.setUserAgent(request.getHeader("User-Agent"));
+        newSession.setIpHash(request.getRemoteAddr());
 
-        String userAgent = request.getHeader("User-Agent");
-        newSession.setUserAgent(userAgent);
-
-        // IP đơn giản (chưa hash, tùy bạn muốn hash thì thêm)
-        String ip = request.getRemoteAddr();
-        newSession.setIpHash(ip);
         return sessionRepository.save(newSession);
     }
+
 }
 

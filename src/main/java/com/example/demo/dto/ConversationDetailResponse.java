@@ -18,7 +18,6 @@ public class ConversationDetailResponse {
         this.messages = messages;
     }
 
-    // getter / setter
 
     public Long getId() {
         return id;

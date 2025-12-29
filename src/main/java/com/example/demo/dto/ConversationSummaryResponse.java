@@ -7,10 +7,9 @@ import java.util.List;
 public class ConversationSummaryResponse {
     private Long id;
     private String title;
-    private String lastVerdict;   // FAKE / REAL / null
+    private String lastVerdict;
     private LocalDateTime updatedAt;
 
-    // constructor tiện
     public ConversationSummaryResponse() {
     }
 
@@ -21,7 +20,6 @@ public class ConversationSummaryResponse {
         this.updatedAt = updatedAt;
     }
 
-    // getter / setter
 
     public Long getId() {
         return id;

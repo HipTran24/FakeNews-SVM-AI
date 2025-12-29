@@ -5,22 +5,16 @@ import java.math.BigDecimal;
 public class AnalyzeResponse {
     private Long itemId;
 
-    // ID của bản ghi AnalysisResult
     private Long resultId;
 
-    // Xác suất tin giả
     private BigDecimal probFake;
 
-    // Xác suất tin thật
     private BigDecimal probReal;
 
-    // Session token để FE lưu lại cho những lần request sau
     private String sessionToken;
 
-    // Nhãn dự đoán (FAKE / REAL / v.v.)
     private String label;
 
-    // ID của cuộc hội thoại
     private Long conversationId;
 
     public AnalyzeResponse() {

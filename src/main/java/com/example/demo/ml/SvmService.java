@@ -23,7 +23,6 @@ public class SvmService {
 
     public SvmService() {
         try {
-            // 1. Load vocab
             ClassPathResource vocabRes = new ClassPathResource("model/vocab.txt");
             int index = 0;
             try (BufferedReader br = new BufferedReader(
@@ -37,7 +36,6 @@ public class SvmService {
                 }
             }
 
-            // 2. Load weights
             this.weights = new double[vocab.size()];
             ClassPathResource weightsRes = new ClassPathResource("model/weights.txt");
             try (BufferedReader br = new BufferedReader(
@@ -52,7 +50,6 @@ public class SvmService {
                 }
             }
 
-            // 3. Load bias
             ClassPathResource biasRes = new ClassPathResource("model/bias.txt");
             try (BufferedReader br = new BufferedReader(
                     new InputStreamReader(biasRes.getInputStream(), StandardCharsets.UTF_8))) {
